@@ -2,16 +2,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import axios from "axios";
-import dotenv from "dotenv";
 import {
   SearchResponse,
   FoodDetailResponse,
 } from "./types/food-data-central.js";
 
-dotenv.config();
-
+// Get API key from environment variable
 const USDA_API_KEY = process.env.USDA_API_KEY;
 const BASE_URL = "https://api.nal.usda.gov/fdc/v1";
+
+// Check if API key is available
+if (!USDA_API_KEY) {
+  console.error("Error: USDA_API_KEY environment variable is not set");
+  process.exit(1);
+}
 
 const server = new McpServer({
   name: "Food Data Central",

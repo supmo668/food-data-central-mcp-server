@@ -17,16 +17,7 @@ the [USDA's FoodData Central API](https://fdc.nal.usda.gov/api-guide).
    ```bash
    npm install
    ```
-3. Set up environment variables:
-
-   - Copy the `.env.template` file to `.env`:
-     ```bash
-     cp .env.template .env
-     ```
-   - Edit the `.env` file and add your USDA API key
-   - You can get a USDA API key by registering at [https://fdc.nal.usda.gov/api-key-signup.html](https://fdc.nal.usda.gov/api-key-signup.html)
-
-4. Build the project:
+3. Build the project:
    ```bash
    npm run build
    ```
@@ -36,12 +27,16 @@ the [USDA's FoodData Central API](https://fdc.nal.usda.gov/api-guide).
 The server uses stdio transport, which means it's designed to be run as a subprocess by an MCP client. To run it directly:
 
 ```bash
+# Set the USDA API key as an environment variable
+export USDA_API_KEY=your-api-key-here
 npm start
 ```
 
 For development with hot reloading:
 
 ```bash
+# Set the USDA API key as an environment variable
+export USDA_API_KEY=your-api-key-here
 npm run dev
 ```
 
@@ -49,44 +44,42 @@ npm run dev
 
 To use this MCP server with Claude Desktop:
 
-1. Build the server:
-
-   ```bash
-   npm run build
-   ```
-
-2. Open the Claude Desktop settings:
+1. Open the Claude Desktop settings:
 
    - On macOS: Click on the Claude menu and select "Settings..."
    - On Windows: Click on the Claude menu and select "Settings..."
 
-3. In the Settings pane, click on "Developer" in the left-hand bar, and then click on "Edit Config"
+2. In the Settings pane, click on "Developer" in the left-hand bar, and then click on "Edit Config"
 
-4. This will create or open a configuration file at:
+3. This will create or open a configuration file at:
 
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
-5. Add the Food Data Central MCP server to the configuration file:
+4. Add the Food Data Central MCP server to the configuration file:
 
    ```json
    {
      "mcpServers": {
        "food-data-central": {
-         "command": "node",
-         "args": ["/path/to/your/repo/dist/index.js"]
+         "command": "npx",
+         "args": ["tsx", "/path/to/food-data-central-mcp-server/src/index.ts"],
+         "env": {
+           "PATH": "/opt/homebrew/bin",
+           "USDA_API_KEY": "<INSERT KEY HERE>"
+         }
        }
      }
    }
    ```
 
-   Replace `/path/to/your/repo` with the absolute path to this repository.
+   Replace `/path/to/food-data-central-mcp-server` with the absolute path to this repository, and `<INSERT KEY HERE>` with your actual USDA API key.
 
-6. Since the server requires the USDA API key as an environment variable, you'll need to set it in your system environment or modify the server code to read from a configuration file.
+   Note: If you're on Windows, you may need to adjust the PATH value to include your npm global installation directory.
 
-7. Save the configuration file and restart Claude Desktop
+5. Save the configuration file and restart Claude Desktop
 
-8. After restarting, you should see a hammer icon in the bottom right corner of the input box. Click on it to see the available tools.
+6. After restarting, you should see a hammer icon in the bottom right corner of the input box. Click on it to see the available tools.
 
 Now Claude will be able to access the Food Data Central API through this MCP server. You can ask Claude to search for foods, get nutrient information, or retrieve detailed food data.
 
@@ -163,48 +156,4 @@ Search for foods using the MCP tool:
     "pageNumber": 1
   }
 }
-```
-
-## Using with MCP Clients
-
-This server is designed to be used with MCP clients that can spawn subprocesses. The client should:
-
-1. Build the server: `npm run build`
-2. Spawn the server as a subprocess: `node dist/index.js`
-3. Communicate with the server via stdin/stdout
-
-For example, using the MCP TypeScript client:
-
-```typescript
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-
-const transport = new StdioClientTransport({
-  command: "node",
-  args: ["dist/index.js"],
-});
-
-const client = new Client(
-  {
-    name: "food-data-client",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      resources: {},
-      tools: {},
-    },
-  }
-);
-
-await client.connect(transport);
-
-// Now you can use the client to access resources and tools
-const result = await client.callTool({
-  name: "search-foods",
-  arguments: {
-    query: "apple",
-    pageSize: 10,
-  },
-});
 ```
