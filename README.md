@@ -45,6 +45,51 @@ For development with hot reloading:
 npm run dev
 ```
 
+## Using with Claude Desktop
+
+To use this MCP server with Claude Desktop:
+
+1. Build the server:
+
+   ```bash
+   npm run build
+   ```
+
+2. Open the Claude Desktop settings:
+
+   - On macOS: Click on the Claude menu and select "Settings..."
+   - On Windows: Click on the Claude menu and select "Settings..."
+
+3. In the Settings pane, click on "Developer" in the left-hand bar, and then click on "Edit Config"
+
+4. This will create or open a configuration file at:
+
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+5. Add the Food Data Central MCP server to the configuration file:
+
+   ```json
+   {
+     "mcpServers": {
+       "food-data-central": {
+         "command": "node",
+         "args": ["/path/to/your/repo/dist/index.js"]
+       }
+     }
+   }
+   ```
+
+   Replace `/path/to/your/repo` with the absolute path to this repository.
+
+6. Since the server requires the USDA API key as an environment variable, you'll need to set it in your system environment or modify the server code to read from a configuration file.
+
+7. Save the configuration file and restart Claude Desktop
+
+8. After restarting, you should see a hammer icon in the bottom right corner of the input box. Click on it to see the available tools.
+
+Now Claude will be able to access the Food Data Central API through this MCP server. You can ask Claude to search for foods, get nutrient information, or retrieve detailed food data.
+
 ## MCP Resources and Tools
 
 ### Resources
