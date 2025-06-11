@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -5,7 +7,7 @@ import axios from "axios";
 import {
   SearchResponse,
   FoodDetailResponse,
-} from "./types/food-data-central.js";
+} from "./types/food-data-central";
 
 // Get API key from environment variable
 const USDA_API_KEY = process.env.USDA_API_KEY;
@@ -256,172 +258,101 @@ server.resource("food-list", "food://list", async (uri: URL) => {
   }
 });
 
-// Tool to search for foods
+const searchFoodsInputSchema = z.object({
+  query: z.string().describe("Search query for foods"),
+  dataType: z
+    .array(
+      z.enum([
+        "Branded",
+        "Foundation",
+        "SR Legacy",
+        "Survey (FNDDS)",
+        "Experimental",
+      ])
+    )
+    .optional()
+    .describe(
+      "Optional. Filter on a specific data type; specify one or more values in an array."
+    ),
+  pageSize: z
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .optional()
+    .default(50)
+    .describe(
+      "Optional. Maximum number of results to return for the current page. Default is 50."
+    ),
+  pageNumber: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .default(1)
+    .describe(
+      "Optional. Page number to retrieve. The offset into the overall result set is expressed as (pageNumber * pageSize)"
+    ),
+  sortBy: z
+    .enum(["dataType.keyword", "lowercaseDescription.keyword", "fdcId", "publishedDate"])
+    .optional()
+    .describe(
+      "Optional. Specify one of the possible values to sort by that field."
+    ),
+  sortOrder: z.enum(["asc", "desc"]).optional().describe("Optional. The sort direction for the results. Only applicable if sortBy is specified."),
+  brandOwner: z.string().optional().describe("Optional. Filter results based on the brand owner of the food. Only applies to Branded Foods"),
+  tradeChannel: z
+    .array(z.enum(["CHILD_NUTRITION_FOOD_PROGRAMS", "DRUG", "FOOD_SERVICE", "GROCERY", "MASS_MERCHANDISING", "MILITARY", "ONLINE", "VENDING"]))
+    .min(1)
+    .max(3)
+    .optional()
+    .describe("Optional. Filter foods containing any of the specified trade channels."),
+  startDate: z.string().optional().describe("Optional. Filter foods published on or after this date. Format: YYYY-MM-DD"),
+  endDate: z.string().optional().describe("Optional. Filter foods published on or before this date. Format: YYYY-MM-DD"),
+}).describe("Input schema for the search-foods tool");
+
+type SearchFoodsInput = z.infer<typeof searchFoodsInputSchema>;
+
+// Plain object to satisfy SDK's type for the schema argument
+const sdkSchemaArg = {
+  title: searchFoodsInputSchema._def.description || "Tool for searching foods",
+  // Adding a property to make it clear this is a plain object for SDK's type system
+  _sdkArg: true 
+};
+
+/**
+ * @tool search-foods
+ * @summary Returns a list of foods that matched search (query) keywords
+ * @description Search for foods using keywords. Results can be filtered by dataType and there are options for result page sizes or sorting.
+ * @param {string} query - One or more search terms. The string may include [search operators](https://fdc.nal.usda.gov/help.html#bkmk-2)
+ * @param {Array<string>} [dataType] - Optional. Filter on a specific data type; specify one or more values in an array. Enum: "Branded", "Foundation", "SR Legacy", "Survey (FNDDS)", "Experimental".
+ * @param {number} [pageSize=50] - Optional. Maximum number of results to return for the current page. Default is 50. Minimum 1, Maximum 200.
+ * @param {number} [pageNumber=1] - Optional. Page number to retrieve. The offset into the overall result set is expressed as (pageNumber * pageSize). Minimum 1.
+ * @param {string} [sortBy] - Optional. Specify one of the possible values to sort by that field. Enum: "dataType.keyword", "lowercaseDescription.keyword", "fdcId", "publishedDate".
+ * @param {string} [sortOrder] - Optional. The sort direction for the results. Only applicable if sortBy is specified. Enum: "asc", "desc".
+ * @param {string} [brandOwner] - Optional. Filter results based on the brand owner of the food. Only applies to Branded Foods.
+ * @param {Array<string>} [tradeChannel] - Optional. Filter foods containing any of the specified trade channels. Enum: "CHILD_NUTRITION_FOOD_PROGRAMS", "DRUG", "FOOD_SERVICE", "GROCERY", "MASS_MERCHANDISING", "MILITARY", "ONLINE", "VENDING". MinItems: 1, MaxItems: 3.
+ * @param {string} [startDate] - Optional. Filter foods published on or after this date. Format: YYYY-MM-DD.
+ * @param {string} [endDate] - Optional. Filter foods published on or before this date. Format: YYYY-MM-DD.
+ */
 server.tool(
   "search-foods",
-  {
-    query: z.string().describe("Search terms to find foods"),
-    dataType: z
-      .array(z.string())
-      .optional()
-      .describe("Filter on a specific data type; specify one or more values"),
-    pageSize: z
-      .number()
-      .optional()
-      .describe(
-        "Maximum number of results to return for the current page (default: 50)"
-      ),
-    pageNumber: z
-      .number()
-      .optional()
-      .describe("Page number to retrieve (default: 1)"),
-    sortBy: z
-      .string()
-      .optional()
-      .describe("Specify one of the possible values to sort by that field"),
-    sortOrder: z
-      .enum(["asc", "desc"])
-      .optional()
-      .describe("The sort direction for the results"),
-    brandOwner: z
-      .string()
-      .optional()
-      .describe(
-        "Filter results based on the brand owner of the food (only for Branded Foods)"
-      ),
-    tradeChannel: z
-      .array(z.string())
-      .optional()
-      .describe("Filter foods containing any of the specified trade channels"),
-    startDate: z
-      .string()
-      .optional()
-      .describe(
-        "Filter foods published on or after this date (format: YYYY-MM-DD)"
-      ),
-    endDate: z
-      .string()
-      .optional()
-      .describe(
-        "Filter foods published on or before this date (format: YYYY-MM-DD)"
-      ),
-  },
-  async ({
-    query,
-    dataType,
-    pageSize = 50,
-    pageNumber = 1,
-    sortBy,
-    sortOrder,
-    brandOwner,
-    tradeChannel,
-    startDate,
-    endDate,
-  }) => {
+  sdkSchemaArg, // Use the plain object for the SDK
+  async (params: any) => { // Handler params as any
+    // Validate and get typed parameters using the original Zod schema
+    const {
+      query,
+      dataType,
+      pageSize, // Defaults are handled by Zod's .parse() if optional fields are undefined
+      pageNumber,
+      sortBy,
+      sortOrder,
+      brandOwner,
+      tradeChannel,
+      startDate,
+      endDate,
+    } = searchFoodsInputSchema.parse(params) as SearchFoodsInput;
     try {
-      /*
-       * OpenAPI Spec:
-       * '/v1/foods/search':
-       *   get:
-       *     tags:
-       *       - FDC
-       *     summary: Returns a list of foods that matched search (query) keywords
-       *     description: Search for foods using keywords. Results can be filtered by dataType and there are options for result page sizes or sorting.
-       *     parameters:
-       *       - in: query
-       *         name: query
-       *         description: One or more search terms.  The string may include [search operators](https://fdc.nal.usda.gov/help.html#bkmk-2)
-       *         required: true
-       *         schema:
-       *           type: string
-       *         example: "cheddar cheese"
-       *       - in: query
-       *         name: dataType
-       *         description: Optional. Filter on a specific data type; specify one or more values in an array.
-       *         schema:
-       *           type: array
-       *           items:
-       *             type: string
-       *             enum:
-       *               - Branded
-       *               - Foundation
-       *               - Survey (FNDDS)
-       *               - SR Legacy
-       *           minItems: 1
-       *           maxItems: 4
-       *         explode: false
-       *         style: form
-       *         example: ["Foundation","SR Legacy"]
-       *       - in: query
-       *         name: pageSize
-       *         description: Optional. Maximum number of results to return for the current page. Default is 50.
-       *         schema:
-       *           type: integer
-       *           minimum: 1
-       *           maximum: 200
-       *         example: 25
-       *       - in: query
-       *         name: pageNumber
-       *         description: Optional. Page number to retrieve. The offset into the overall result set is expressed as (pageNumber * pageSize)
-       *         schema:
-       *           type: integer
-       *         example: 2
-       *       - in: query
-       *         name: sortBy
-       *         description: Optional. Specify one of the possible values to sort by that field. Note, dataType.keyword will be dataType and lowercaseDescription.keyword will be description in future releases.
-       *         schema:
-       *           type: string
-       *           enum:
-       *             - dataType.keyword
-       *             - lowercaseDescription.keyword
-       *             - fdcId
-       *             - publishedDate
-       *         example: dataType.keyword
-       *       - in: query
-       *         name: sortOrder
-       *         description: Optional. The sort direction for the results. Only applicable if sortBy is specified.
-       *         schema:
-       *           type: string
-       *           enum:
-       *             - asc
-       *             - desc
-       *         example: asc
-       *       - in: query
-       *         name: brandOwner
-       *         description: Optional. Filter results based on the brand owner of the food. Only applies to Branded Foods
-       *         schema:
-       *           type: string
-       *         example: "Kar Nut Products Company"
-       *       - in: query
-       *         name: tradeChannel
-       *         description: Optional. Filter foods containing any of the specified trade channels.
-       *         schema:
-       *           type: array
-       *           items:
-       *             type: string
-       *             enum:
-       *               - "CHILD_NUTRITION_FOOD_PROGRAMS"
-       *               - "DRUG"
-       *               - "FOOD_SERVICE"
-       *               - "GROCERY"
-       *               - "MASS_MERCHANDISING"
-       *               - "MILITARY"
-       *               - "ONLINE"
-       *               - "VENDING"
-       *         minItems: 1
-       *         maxItems: 3
-       *         example: ["CHILD_NUTRITION_FOOD_PROGRAMS", "GROCERY"]
-       *       - in: query
-       *         name: startDate
-       *         type: string
-       *         example: "2021-01-01"
-       *         description: "Filter foods published on or after this date. Format: YYYY-MM-DD"
-       *       - in: query
-       *         name: endDate
-       *         type: string
-       *         example: "2021-12-30"
-       *         description: "Filter foods published on or before this date. Format: YYYY-MM-DD"
-       */
       const response = await axios.get<SearchResponse>(
         `${BASE_URL}/foods/search`,
         {

@@ -17,27 +17,38 @@ the [USDA's FoodData Central API](https://fdc.nal.usda.gov/api-guide).
    ```bash
    npm install
    ```
-3. Build the project:
+3. Create a `.env` file in the root directory with your USDA API key:
+   ```bash
+   echo "USDA_API_KEY=your-api-key-here" > .env
+   ```
+4. Build the project:
    ```bash
    npm run build
    ```
+
+> **Note:** The `.env` file is automatically loaded by the server at startup using dotenv. Make sure to add this file to your `.gitignore` to avoid exposing your API key.
 
 ## Running the Server
 
 The server uses stdio transport, which means it's designed to be run as a subprocess by an MCP client. To run it directly:
 
 ```bash
-# Set the USDA API key as an environment variable
-export USDA_API_KEY=your-api-key-here
+# With your API key already in the .env file
 npm start
 ```
 
 For development with hot reloading:
 
 ```bash
-# Set the USDA API key as an environment variable
-export USDA_API_KEY=your-api-key-here
+# With your API key already in the .env file
 npm run dev
+```
+
+Alternatively, you can set the USDA API key as an environment variable directly:
+
+```bash
+# Directly setting the environment variable
+USDA_API_KEY=your-api-key-here npm start
 ```
 
 ## Using with Claude Desktop
